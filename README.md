@@ -1,6 +1,6 @@
-# RAG Learning Journey
+# AI Learning Journey
 
-This repository documents my journey of learning and building a Retrieval-Augmented Generation (RAG) application from scratch.
+This repository documents my journey of learning AI and building a Retrieval-Augmented Generation (RAG) application from scratch.
 
 ## Day 1
 - AI Fundamentals
