@@ -1,0 +1,188 @@
+# Import required libraries
+import fitz
+import chromadb
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from sentence_transformers import SentenceTransformer
+# Gemini
+from google import genai
+# Environment Variables
+from dotenv import load_dotenv
+import os
+
+
+# Load the Embedding Model
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+print("Embedding model loaded successfully!")
+
+
+# Function to extract text from a PDF
+def extract_text(pdf_path):
+    # Open the PDF
+    doc = fitz.open(pdf_path)
+    # Variable to store all extracted text
+    text = ""
+    # Loop through every page
+    for page in doc:
+        text += page.get_text()
+    # Close the PDF
+    doc.close()
+    # Return the extracted text
+    return text
+
+# Function to split extracted text into smaller chunks
+def split_text(text):
+
+    # Create a text splitter object
+    text_splitter = RecursiveCharacterTextSplitter(
+
+        # Maximum characters in one chunk
+        chunk_size=500,
+
+        # Overlap between consecutive chunks
+        chunk_overlap=50
+    )
+
+    # Split the text into chunks
+    chunks = text_splitter.split_text(text)
+
+    # Return the list of chunks
+    return chunks
+
+# Function to generate embeddings for all chunks
+def create_embeddings(chunks):
+
+    # Generate embeddings for every chunk
+    embeddings = embedding_model.encode(chunks)
+
+    # Return the embeddings
+    return embeddings
+
+
+# Function to create a ChromaDB collection
+def create_collection():
+
+    # Create a ChromaDB client
+    chroma_client = chromadb.Client()
+
+    # Create a collection
+    collection = chroma_client.create_collection(
+        name="rag_documents"
+    )
+
+    # Return the collection
+    return collection
+
+# Function to store chunks and embeddings in ChromaDB
+def store_in_chromadb(collection, chunks, embeddings):
+
+    # Generate unique IDs for each chunk
+    ids = [f"chunk_{i}" for i in range(len(chunks))]
+
+    # Create metadata for every chunk
+    metadatas = []
+
+    for i in range(len(chunks)):
+        metadatas.append(
+            {
+                "chunk_number": i
+            }
+        )
+
+    # Store everything in ChromaDB
+    collection.add(
+        ids=ids,
+        documents=chunks,
+        embeddings=embeddings.tolist(),
+        metadatas=metadatas
+    )
+    
+# Function to retrieve the most relevant chunks
+def retrieve_chunks(collection, question):
+
+    # Convert the user's question into an embedding
+    question_embedding = embedding_model.encode(question)
+
+    # Search the collection
+    results = collection.query(
+        query_embeddings=[question_embedding.tolist()],
+        n_results=3
+    )
+
+    # Return the retrieved results
+    return results
+
+
+
+
+# Load environment variables
+load_dotenv()
+
+# Get the Gemini API Key
+api_key = os.getenv("GEMINI_API_KEY")
+
+# Create Gemini Client
+gemini_client = genai.Client(api_key=api_key)
+
+# Path to the PDF
+pdf_path = "../Syllabus/Artificial Intelligence with Machine Learning.pdf"
+
+# Extract text from the PDF
+text = extract_text(pdf_path)
+
+# Split the text into chunks
+chunks = split_text(text)
+
+# Generate embeddings
+embeddings = create_embeddings(chunks)
+
+# Create a ChromaDB collection
+collection = create_collection()
+
+# Store chunks and embeddings
+store_in_chromadb(collection, chunks, embeddings)
+
+
+while True:
+
+    # User asks a question
+    user_question = input("\nAsk a question (type 'done' to exit): ")
+
+    # Exit condition
+    if user_question.lower() == "done":
+        print("Goodbye! 👋")
+        break
+
+    # Retrieve relevant chunks
+    results = retrieve_chunks(collection, user_question)
+
+    # Extract chunks
+    retrieved_chunks = results["documents"][0]
+
+    # Build context
+    context = "\n\n".join(retrieved_chunks)
+
+    # Build RAG prompt
+    prompt = f"""
+You are a helpful AI assistant.
+
+Answer the user's question ONLY using the context provided below.
+
+Context:
+{context}
+
+Question:
+{user_question}
+
+If the answer is not present in the context, reply:
+"I couldn't find that information in the document."
+"""
+
+    # Generate response
+    response = gemini_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+
+    # Display answer
+    print("\nAnswer:")
+    print(response.text)
