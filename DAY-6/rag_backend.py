@@ -153,8 +153,42 @@ def retrieve_chunks(collection, question):
     # Return the retrieved results
     return results
 
+#function to generate answers
+def generate_answer(collection, user_question):
 
 
+    # Retrieve relevant chunks
+    results = retrieve_chunks(collection, user_question)
+
+    # Extract chunks
+    retrieved_chunks = results["documents"][0]
+
+    # Build context
+    context = "\n\n".join(retrieved_chunks)
+
+    # Build RAG prompt
+    prompt = f"""
+    You are a helpful AI assistant.
+
+    Answer the user's question ONLY using the context provided below.
+
+    Context:
+    {context}
+
+    Question:
+    {user_question}
+
+    If the answer is not present in the context, reply:
+    "I couldn't find that information in the document."
+    """
+
+    # Generate response
+    response = gemini_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+    answer = response.text
+    return answer, context
 
 # Load environment variables
 load_dotenv()

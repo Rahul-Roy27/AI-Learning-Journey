@@ -1,10 +1,21 @@
 import streamlit as st
 import os
-from rag_backend import create_collection,index_pdf
+from rag_backend import (
+    create_collection,
+    index_pdf,
+    generate_answer,
+)
 
+if "collection" not in st.session_state:
+    st.session_state.collection = None
+    
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    
 # Initialize session state :-> If this is the first time the app is running, create a variable called indexed and set it to False.
 if "indexed" not in st.session_state:
     st.session_state.indexed = False
+    
 
 # Page Title
 st.title("📄 AI PDF Assistant")
@@ -36,17 +47,13 @@ if uploaded_file is not None:
     st.success("PDF saved successfully!")  
         #INDEXING THE PDF
     if st.button("Index PDF"):
-
-        st.write("Button clicked!")
-        print("Button clicked!")
-
-        collection = create_collection(pdf_path)
-
-        print("Collection created!")
-
-        index_pdf(collection, pdf_path)
-
-        print("Indexing completed!")
+        
+        st.session_state.collection = create_collection(pdf_path)
+        
+        index_pdf(
+            st.session_state.collection,
+            pdf_path,
+        )
 
         st.session_state.indexed = True
         st.success("PDF indexed successfully!")
@@ -55,12 +62,50 @@ if uploaded_file is not None:
 if st.session_state.indexed:
 
     st.header("💬 Chat with your PDF")
+    
+    # Display previous chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
 
     user_question = st.chat_input(
         "Ask anything about the uploaded PDF..."
     )
 
     if user_question:
-        st.chat_message("user").write(user_question)
+
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": user_question
+            }
+        )
+
+        with st.chat_message("user"):
+            st.write(user_question)
+
+
+        # Generate the answer using the backend
+        with st.spinner("Generating answer..."):
+
+            answer, context = generate_answer(
+                st.session_state.collection,
+                user_question
+            )
+        
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": answer
+            }
+        )
+
+        # Display the AI's response
+        with st.chat_message("assistant"):
+            st.write(answer)
+
+        # Display the retrieved context
+        with st.expander("📚 Retrieved Context"):
+            st.write(context)
     
     
