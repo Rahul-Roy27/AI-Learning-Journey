@@ -14,8 +14,9 @@ import os
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 print("Embedding model loaded successfully!")
 
-
-# Function to extract text from a PDF
+# ----------------------------------------
+# PDF Processing Functions
+# ----------------------------------------
 def extract_text(pdf_path):
     # Open the PDF
     doc = fitz.open(pdf_path)
@@ -48,7 +49,9 @@ def split_text(text):
     # Return the list of chunks
     return chunks
 
-# Function to generate embeddings for all chunks
+# ----------------------------------------
+# Embedding Functions
+# ----------------------------------------
 def create_embeddings(chunks):
 
     # Generate embeddings for every chunk
@@ -58,7 +61,9 @@ def create_embeddings(chunks):
     return embeddings
 
 
-# Function to create a ChromaDB collection
+# ----------------------------------------
+# ChromaDB Functions
+# ----------------------------------------
 def create_collection(pdf_path):
 
     # Create a ChromaDB client
@@ -114,58 +119,44 @@ def store_in_chromadb(collection, chunks, embeddings):
 def index_pdf(collection, pdf_path):
     # Process the PDF only if the collection is empty
     if collection.count() == 0:
-
         print("Collection is empty. Processing PDF...")
         print("No embeddings found. Indexing PDF...")
-
         # Extract text from the PDF
         text = extract_text(pdf_path)
-
         # Split the text into chunks
         chunks = split_text(text)
-        
-
         # Generate embeddings
         embeddings = create_embeddings(chunks)
-
         # Store chunks and embeddings
         store_in_chromadb(collection, chunks, embeddings)
-
         print("PDF processed and stored successfully!")
         print("PDF indexed successfully!")
-
     else:
         print("Collection already exists. Skipping PDF processing.")
 
 
-# Function to retrieve the most relevant chunks
+# ----------------------------------------
+# Retrieval & Generation
+# ----------------------------------------
 def retrieve_chunks(collection, question):
-
     # Convert the user's question into an embedding
     question_embedding = embedding_model.encode(question)
-
     # Search the collection
     results = collection.query(
         query_embeddings=[question_embedding.tolist()],
         n_results=3
     )
-
     # Return the retrieved results
     return results
 
 #function to generate answers
 def generate_answer(collection, user_question):
-
-
     # Retrieve relevant chunks
     results = retrieve_chunks(collection, user_question)
-
     # Extract chunks
     retrieved_chunks = results["documents"][0]
-
     # Build context
     context = "\n\n".join(retrieved_chunks)
-
     # Build RAG prompt
     prompt = f"""
     You are a helpful AI assistant.
@@ -190,11 +181,17 @@ def generate_answer(collection, user_question):
     answer = response.text
     return answer, context
 
+
+# ----------------------------------------
+# Gemini Configuration
+# ----------------------------------------
 # Load environment variables
 load_dotenv()
 
+
 # Get the Gemini API Key
 api_key = os.getenv("GEMINI_API_KEY")
+
 
 # Create Gemini Client
 gemini_client = genai.Client(api_key=api_key)
